@@ -2,8 +2,6 @@
 
 A **fast-paced multiplayer air combat** game where you battle as royal warriors in the skies!
 
-![Game Banner](banner.png)
-
 ## 🎮 Quick Start
 
 1. Clone repo
