@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sky Warriors - Multiplayer Air Fighter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            color: white;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(180deg, #87CEEB 0%, #98FB98 100%);
+            cursor: crosshair;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #hud {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            pointer-events: none;
+        }
+
+        #health, #ammo, #score {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 3px 6px;
+            margin: 2px 0;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        #healthBar, #ammoBar {
+            width: 80px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        #healthFill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffaa44);
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        #ammoFill {
+            height: 100%;
+            background: linear-gradient(90deg, #4444ff, #44aaff);
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        #minimap {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 120px;
+            height: 90px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #fff;
+            border-radius: 5px;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 8px;
+            border-radius: 5px;
+            font-size: 9px;
+            max-width: 120px;
+        }
+
+        #playerList {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 5px 8px;
+            border-radius: 5px;
+            min-width: 100px;
+            font-size: 10px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        #gameMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            pointer-events: all;
+        }
+
+        button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            margin: 10px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        input {
+            padding: 10px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .explosion {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, #ff4444, #ffaa00, transparent);
+            border-radius: 50%;
+            animation: explode 0.5s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes explode {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .damage-indicator {
+            position: absolute;
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 18px;
+            animation: damageFloat 1s ease-out forwards;
+            pointer-events: none;
+        }
+
+        @keyframes damageFloat {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-50px); opacity: 0; }
+        }
+
+        #respawnTimer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff4444;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui">
+            <div id="hud">
+                <div id="health">
+                    Health: <span id="healthText">100</span>/100
+                    <div id="healthBar"><div id="healthFill"></div></div>
+                </div>
+                <div id="ammo">
+                    Ammo: <span id="ammoText">30</span>/30
+                    <div id="ammoBar"><div id="ammoFill"></div></div>
+                </div>
+                <div id="score">Score: <span id="scoreText">0</span></div>
+                <div id="kills">Kills: <span id="killsText">0</span></div>
+            </div>
+
+            <canvas id="minimap"></canvas>
+
+            <div id="playerList">
+                <div style="font-size: 10px; font-weight: bold; margin-bottom: 3px;">Leaderboard</div>
+                <div id="players"></div>
+            </div>
+
+            <div id="controls">
+                <strong>Controls:</strong><br>
+                Arrow Keys - Move<br>
+                Mouse - Aim<br>
+                Click - Shoot<br>
+                Space - Boost<br>
+                R - Reload
+            </div>
+
+            <div id="gameMenu">
+                <h1>👑 Royal Battle Arena</h1>
+                <input type="text" id="playerName" placeholder="Enter your royal name" maxlength="20">
+                <br>
+                <button onclick="startGame()">Join Battle</button>
+                <button onclick="showSettings()">Settings</button>
+            </div>
+
+            <div id="respawnTimer" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+
+// Sound effects
+const sounds = {
+    shoot: new Audio('shoot.mp3'),
+    explosion: new Audio('explosion.mp3'),
+    reload: new Audio('reload.mp3')
+};
+for (let key in sounds) {
+    sounds[key].volume = 0.5;
+    sounds[key].load();
+}
+
+        let gameState = {
+            canvas: null,
+            ctx: null,
+            minimap: null,
+            minimapCtx: null,
+            players: new Map(),
+            bullets: [],
+            explosions: [],
+            powerups: [],
+            myPlayerId: null,
+            gameStarted: false,
+            keys: {},
+            mouse: { x: 0, y: 0, down: false },
+            lastShot: 0,
+            respawnTime: 0,
+            gameTime: 0
+        };
+
+        // Game constants
+        const GAME_CONFIG = {
+            WORLD_WIDTH: 2000,
+            WORLD_HEIGHT: 1500,
+            PLAYER_SPEED: 3,
+            BOOST_SPEED: 6,
+            BULLET_SPEED: 8,
+            FIRE_RATE: 200,
+            MAX_HEALTH: 100,
+            MAX_AMMO: 30,
+            RELOAD_TIME: 2000,
+            RESPAWN_TIME: 5000
+        };
+
+        // Player class
+        class Player {
+            constructor(id, name, x, y) {
+                this.id = id;
+                this.name = name;
+                this.x = x;
+                this.y = y;
+                this.angle = 0;
+                this.health = GAME_CONFIG.MAX_HEALTH;
+                this.ammo = GAME_CONFIG.MAX_AMMO;
+                this.score = 0;
+                this.kills = 0;
+                this.alive = true;
+                this.reloading = false;
+                this.lastReload = 0;
+                this.boost = 100;
+                this.color = this.generateColor();
+                this.isPlayer = id === gameState.myPlayerId;
+                this.enemyType = !this.isPlayer ? this.generateEnemyType() : null;
+                this.animationFrame = 0;
+                this.walkCycle = 0;
+                this.attackAnimation = 0;
+                this.floatOffset = Math.random() * Math.PI * 2;
+            }
+
+            generateColor() {
+                const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff'];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            generateEnemyType() {
+                const enemies = [
+                    { name: 'Shadow Assassin', colors: ['#2c2c2c', '#666666'], size: 0.9, weapon: 'dagger' },
+                    { name: 'Fire Demon', colors: ['#ff4444', '#ff8800'], size: 1.2, weapon: 'flame' },
+                    { name: 'Ice Golem', colors: ['#88ccff', '#ffffff'], size: 1.4, weapon: 'ice' },
+                    { name: 'Dark Knight', colors: ['#440044', '#880088'], size: 1.1, weapon: 'sword' },
+                    { name: 'Void Wraith', colors: ['#1a1a2e', '#16213e'], size: 1.0, weapon: 'magic' }
+                ];
+                return enemies[Math.floor(Math.random() * enemies.length)];
+            }
+
+            update() {
+                if (!this.alive && Date.now() - this.deathTime > GAME_CONFIG.RESPAWN_TIME) {
+                    this.respawn();
+                }
+
+                if (this.reloading && Date.now() - this.lastReload > GAME_CONFIG.RELOAD_TIME) {
+                    this.reloading = false;
+                    this.ammo = GAME_CONFIG.MAX_AMMO;
+                }
+
+                // Boost regeneration
+                if (this.boost < 100) {
+                    this.boost += 0.2;
+                }
+
+                // Animation updates
+                this.animationFrame += 0.15;
+                this.walkCycle = Math.sin(this.animationFrame) * 0.2;
+                this.floatOffset += 0.05;
+                
+                if (this.attackAnimation > 0) {
+                    this.attackAnimation -= 0.1;
+                }
+            }
+
+            takeDamage(damage) {
+                if (!this.alive) return;
+                
+                this.health -= damage;
+                if (this.health <= 0) {
+                    this.die();
+                }
+                
+                // Show damage indicator
+                showDamageIndicator(this.x, this.y, damage);
+            }
+
+            die() {
+                this.alive = false;
+                this.deathTime = Date.now();
+                createExplosion(this.x, this.y);
+                sounds.explosion.currentTime = 0;
+                sounds.explosion.play();
+            }
+
+            respawn() {
+                this.alive = true;
+                this.health = GAME_CONFIG.MAX_HEALTH;
+                this.ammo = GAME_CONFIG.MAX_AMMO;
+                this.x = Math.random() * GAME_CONFIG.WORLD_WIDTH;
+                this.y = Math.random() * GAME_CONFIG.WORLD_HEIGHT;
+                this.reloading = false;
+            }
+
+            reload() {
+                if (!this.reloading && this.ammo < GAME_CONFIG.MAX_AMMO) {
+                    this.reloading = true;
+                    this.lastReload = Date.now();
+                    sounds.reload.currentTime = 0;
+                    sounds.reload.play();
+                }
+            }
+
+            shoot() {
+                if (!this.alive || this.reloading || this.ammo <= 0) return false;
+                
+                const now = Date.now();
+                if (now - this.lastShot < GAME_CONFIG.FIRE_RATE) return false;
+                
+                this.ammo--;
+                this.lastShot = now;
+                this.attackAnimation = 1.0; // Trigger attack animation
+                
+                const bullet = new Bullet(
+                    this.x + Math.cos(this.angle) * 30,
+                    this.y + Math.sin(this.angle) * 30,
+                    this.angle,
+                    this.id
+                );
+                
+                gameState.bullets.push(bullet);
+                sounds.shoot.currentTime = 0;
+                sounds.shoot.play();
+                return true;
+            }
+
+            draw(ctx, camera) {
+                if (!this.alive) return;
+
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y + Math.sin(this.floatOffset) * 3;
+
+                ctx.save();
+                ctx.translate(screenX, screenY);
+                ctx.rotate(this.angle);
+
+                if (this.isPlayer) {
+                    this.drawKing(ctx);
+                } else {
+                    this.drawEnemy(ctx);
+                }
+
+                ctx.restore();
+
+                // Draw name and health bar
+                ctx.fillStyle = 'white';
+                ctx.font = '11px Arial';
+                ctx.textAlign = 'center';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeText(this.name, screenX, screenY - 40);
+                ctx.fillText(this.name, screenX, screenY - 40);
+
+                // Health bar
+                const barWidth = 40;
+                const barHeight = 4;
+                ctx.fillStyle = 'red';
+                ctx.fillRect(screenX - barWidth/2, screenY - 30, barWidth, barHeight);
+                ctx.fillStyle = 'green';
+                ctx.fillRect(screenX - barWidth/2, screenY - 30, (this.health / GAME_CONFIG.MAX_HEALTH) * barWidth, barHeight);
+            }
+
+            drawKing(ctx) {
+                // King's cape (behind)
+                ctx.fillStyle = '#8B0000';
+                ctx.beginPath();
+                ctx.ellipse(-15, 5, 12, 20, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // King's body
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(-8, -5, 16, 25);
+
+                // Arms
+                const armOffset = this.walkCycle * 10;
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(-12, 0 + armOffset, 6, 15);
+                ctx.fillRect(6, 0 - armOffset, 6, 15);
+
+                // Legs
+                const legOffset = this.walkCycle * 8;
+                ctx.fillStyle = '#4169E1';
+                ctx.fillRect(-6, 15 + legOffset, 5, 12);
+                ctx.fillRect(1, 15 - legOffset, 5, 12);
+
+                // Head
+                ctx.fillStyle = '#FDBCB4';
+                ctx.beginPath();
+                ctx.arc(0, -15, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Crown
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(-8, -28, 16, 8);
+                // Crown jewels
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(-4, -24, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(0, -24, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(4, -24, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(-3, -15, 1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(3, -15, 1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Beard
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.ellipse(0, -8, 6, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Royal scepter (weapon)
+                if (this.attackAnimation > 0) {
+                    ctx.strokeStyle = '#FFD700';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(15, -5);
+                    ctx.lineTo(25, -10);
+                    ctx.stroke();
+                    
+                    // Scepter orb
+                    ctx.fillStyle = '#00FFFF';
+                    ctx.beginPath();
+                    ctx.arc(25, -10, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            drawEnemy(ctx) {
+                const enemy = this.enemyType;
+                const size = enemy.size;
+                
+                // Enemy body
+                ctx.fillStyle = enemy.colors[0];
+                ctx.fillRect(-10 * size, -8 * size, 20 * size, 20 * size);
+
+                // Arms with weapon
+                const armOffset = this.walkCycle * 8;
+                ctx.fillStyle = enemy.colors[0];
+                ctx.fillRect(-15 * size, 0 + armOffset, 8 * size, 12 * size);
+                ctx.fillRect(7 * size, 0 - armOffset, 8 * size, 12 * size);
+
+                // Legs
+                const legOffset = this.walkCycle * 6;
+                ctx.fillStyle = enemy.colors[1];
+                ctx.fillRect(-8 * size, 12 * size + legOffset, 6 * size, 10 * size);
+                ctx.fillRect(2 * size, 12 * size - legOffset, 6 * size, 10 * size);
+
+                // Head
+                ctx.fillStyle = enemy.colors[0];
+                ctx.beginPath();
+                ctx.arc(0, -15 * size, 8 * size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Glowing eyes
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.arc(-3 * size, -15 * size, 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(3 * size, -15 * size, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Enemy-specific features
+                if (enemy.weapon === 'sword' && this.attackAnimation > 0) {
+                    ctx.strokeStyle = '#C0C0C0';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(12 * size, 0);
+                    ctx.lineTo(20 * size, -8);
+                    ctx.stroke();
+                } else if (enemy.weapon === 'flame' && this.attackAnimation > 0) {
+                    ctx.fillStyle = '#FF4500';
+                    ctx.beginPath();
+                    ctx.ellipse(15 * size, 0, 8, 4, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (enemy.weapon === 'ice' && this.attackAnimation > 0) {
+                    ctx.fillStyle = '#00BFFF';
+                    ctx.beginPath();
+                    ctx.moveTo(12 * size, 0);
+                    ctx.lineTo(18 * size, -3);
+                    ctx.lineTo(18 * size, 3);
+                    ctx.fill();
+                } else if (enemy.weapon === 'magic' && this.attackAnimation > 0) {
+                    ctx.fillStyle = '#9400D3';
+                    ctx.beginPath();
+                    ctx.arc(15 * size, 0, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Enemy aura
+                if (enemy.name === 'Shadow Assassin') {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 25 * size, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (enemy.name === 'Fire Demon') {
+                    ctx.fillStyle = 'rgba(255, 69, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 22 * size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Bullet class
+        class Bullet {
+            constructor(x, y, angle, ownerId) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle;
+                this.ownerId = ownerId;
+                this.speed = GAME_CONFIG.BULLET_SPEED;
+                this.damage = 25;
+                this.life = 1000; // milliseconds
+                this.created = Date.now();
+            }
+
+            update() {
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+
+                // Check if bullet is expired
+                if (Date.now() - this.created > this.life) {
+                    return false;
+                }
+
+                // Check world boundaries
+                if (this.x < 0 || this.x > GAME_CONFIG.WORLD_WIDTH || 
+                    this.y < 0 || this.y > GAME_CONFIG.WORLD_HEIGHT) {
+                    return false;
+                }
+
+                // Check collision with players
+                for (let [id, player] of gameState.players) {
+                    if (id !== this.ownerId && player.alive) {
+                        const dx = this.x - player.x;
+                        const dy = this.y - player.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 25) {
+                            player.takeDamage(this.damage);
+                            
+                            if (!player.alive) {
+                                // Award kill to shooter
+                                const shooter = gameState.players.get(this.ownerId);
+                                if (shooter) {
+                                    shooter.kills++;
+                                    shooter.score += 100;
+                                }
+                            }
+                            
+                            return false;
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            draw(ctx, camera) {
+                const screenX = this.x - camera.x;
+                const screenY = this.y - camera.y;
+
+                ctx.save();
+                ctx.translate(screenX, screenY);
+                ctx.rotate(this.angle);
+
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(-5, -1, 10, 2);
+
+                ctx.restore();
+            }
+        }
+
+        // Camera system
+        class Camera {
+            constructor() {
+                this.x = 0;
+                this.y = 0;
+                this.target = null;
+            }
+
+            follow(target) {
+                this.target = target;
+            }
+
+            update() {
+                if (this.target && this.target.alive) {
+                    const canvas = gameState.canvas;
+                    this.x = this.target.x - canvas.width / 2;
+                    this.y = this.target.y - canvas.height / 2;
+
+                    // Keep camera within world bounds
+                    this.x = Math.max(0, Math.min(this.x, GAME_CONFIG.WORLD_WIDTH - canvas.width));
+                    this.y = Math.max(0, Math.min(this.y, GAME_CONFIG.WORLD_HEIGHT - canvas.height));
+                }
+            }
+        }
+
+        // Initialize game
+        function initGame() {
+            gameState.canvas = document.getElementById('gameCanvas');
+            gameState.ctx = gameState.canvas.getContext('2d');
+            gameState.minimap = document.getElementById('minimap');
+            gameState.minimapCtx = gameState.minimap.getContext('2d');
+
+            // Set canvas size
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // Initialize camera
+            gameState.camera = new Camera();
+
+            // Event listeners
+            setupEventListeners();
+
+            // Create some AI players for demo
+            createAIPlayers();
+
+            // Start game loop
+            gameLoop();
+        }
+
+        function resizeCanvas() {
+            gameState.canvas.width = window.innerWidth;
+            gameState.canvas.height = window.innerHeight;
+        }
+
+        function setupEventListeners() {
+            // Keyboard events
+            document.addEventListener('keydown', (e) => {
+                gameState.keys[e.key] = true; // Use e.key directly for arrow keys
+                
+                if (e.key.toLowerCase() === 'r') {
+                    const myPlayer = gameState.players.get(gameState.myPlayerId);
+                    if (myPlayer) myPlayer.reload();
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                gameState.keys[e.key] = false; // Use e.key directly for arrow keys
+            });
+
+            // Mouse events
+            gameState.canvas.addEventListener('mousemove', (e) => {
+                const rect = gameState.canvas.getBoundingClientRect();
+                gameState.mouse.x = e.clientX - rect.left;
+                gameState.mouse.y = e.clientY - rect.top;
+            });
+
+            gameState.canvas.addEventListener('mousedown', (e) => {
+                gameState.mouse.down = true;
+                
+                const myPlayer = gameState.players.get(gameState.myPlayerId);
+                if (myPlayer) {
+                    myPlayer.shoot();
+                }
+            });
+
+            gameState.canvas.addEventListener('mouseup', (e) => {
+                gameState.mouse.down = false;
+            });
+        }
+
+        function createAIPlayers() {
+            const enemyNames = ['Shadow Reaper', 'Flame Lord', 'Frost Giant', 'Void Knight', 'Dark Sorcerer'];
+            
+            for (let i = 0; i < 5; i++) {
+                const ai = new Player(
+                    'ai_' + i,
+                    enemyNames[i],
+                    Math.random() * GAME_CONFIG.WORLD_WIDTH,
+                    Math.random() * GAME_CONFIG.WORLD_HEIGHT
+                );
+                gameState.players.set(ai.id, ai);
+            }
+        }
+
+        function startGame() {
+            const nameInput = document.getElementById('playerName');
+            const playerName = nameInput.value.trim() || 'Anonymous Pilot';
+            
+            // Create player
+            gameState.myPlayerId = 'player_' + Date.now();
+            const myPlayer = new Player(
+                gameState.myPlayerId,
+                playerName,
+                Math.random() * GAME_CONFIG.WORLD_WIDTH,
+                Math.random() * GAME_CONFIG.WORLD_HEIGHT
+            );
+            
+            gameState.players.set(gameState.myPlayerId, myPlayer);
+            gameState.camera.follow(myPlayer);
+            
+            // Hide menu
+            document.getElementById('gameMenu').style.display = 'none';
+            gameState.gameStarted = true;
+        }
+
+        function updateAI() {
+            for (let [id, player] of gameState.players) {
+                if (id.startsWith('ai_') && player.alive) {
+                    // Simple AI behavior
+                    const myPlayer = gameState.players.get(gameState.myPlayerId);
+                    if (myPlayer && myPlayer.alive) {
+                        const dx = myPlayer.x - player.x;
+                        const dy = myPlayer.y - player.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance < 300) {
+                            // Move towards player
+                            player.angle = Math.atan2(dy, dx);
+                            player.x += Math.cos(player.angle) * 2;
+                            player.y += Math.sin(player.angle) * 2;
+                            
+                            // Shoot at player
+                            if (Math.random() < 0.02) {
+                                player.shoot();
+                            }
+                        } else {
+                            // Random movement
+                            if (Math.random() < 0.05) {
+                                player.angle = Math.random() * Math.PI * 2;
+                            }
+                            player.x += Math.cos(player.angle) * 1;
+                            player.y += Math.sin(player.angle) * 1;
+                        }
+                        
+                        // Keep AI within bounds
+                        player.x = Math.max(50, Math.min(player.x, GAME_CONFIG.WORLD_WIDTH - 50));
+                        player.y = Math.max(50, Math.min(player.y, GAME_CONFIG.WORLD_HEIGHT - 50));
+                    }
+                }
+            }
+        }
+
+        function updatePlayer() {
+            const myPlayer = gameState.players.get(gameState.myPlayerId);
+            if (!myPlayer || !myPlayer.alive) return;
+
+            // Movement
+            let speed = GAME_CONFIG.PLAYER_SPEED;
+            if (gameState.keys[' '] && myPlayer.boost > 0) {
+                speed = GAME_CONFIG.BOOST_SPEED;
+                myPlayer.boost -= 1;
+            }
+
+            if (gameState.keys['ArrowUp']) myPlayer.y -= speed;
+            if (gameState.keys['ArrowDown']) myPlayer.y += speed;
+            if (gameState.keys['ArrowLeft']) myPlayer.x -= speed;
+            if (gameState.keys['ArrowRight']) myPlayer.x += speed;
+
+            // Keep player within bounds
+            myPlayer.x = Math.max(25, Math.min(myPlayer.x, GAME_CONFIG.WORLD_WIDTH - 25));
+            myPlayer.y = Math.max(25, Math.min(myPlayer.y, GAME_CONFIG.WORLD_HEIGHT - 25));
+
+            // Aim towards mouse
+            const mouseWorldX = gameState.mouse.x + gameState.camera.x;
+            const mouseWorldY = gameState.mouse.y + gameState.camera.y;
+            myPlayer.angle = Math.atan2(mouseWorldY - myPlayer.y, mouseWorldX - myPlayer.x);
+
+            // Continuous shooting
+            if (gameState.mouse.down) {
+                myPlayer.shoot();
+            }
+        }
+
+        function updateBullets() {
+            gameState.bullets = gameState.bullets.filter(bullet => bullet.update());
+        }
+
+        function updateExplosions() {
+            gameState.explosions = gameState.explosions.filter(explosion => {
+                explosion.life--;
+                return explosion.life > 0;
+            });
+        }
+
+        function updateUI() {
+            const myPlayer = gameState.players.get(gameState.myPlayerId);
+            if (!myPlayer) return;
+
+            // Update HUD
+            document.getElementById('healthText').textContent = Math.max(0, myPlayer.health);
+            document.getElementById('healthFill').style.width = (Math.max(0, myPlayer.health) / GAME_CONFIG.MAX_HEALTH * 100) + '%';
+            
+            document.getElementById('ammoText').textContent = myPlayer.ammo;
+            document.getElementById('ammoFill').style.width = (myPlayer.ammo / GAME_CONFIG.MAX_AMMO * 100) + '%';
+            
+            document.getElementById('scoreText').textContent = myPlayer.score;
+            document.getElementById('killsText').textContent = myPlayer.kills;
+
+            // Update player list
+            const playersDiv = document.getElementById('players');
+            playersDiv.innerHTML = '';
+            
+            // Sort players by kills for leaderboard
+            const sortedPlayers = Array.from(gameState.players.values())
+                .sort((a, b) => b.kills - a.kills)
+                .slice(0, 5); // Show top 5 only
+            
+            for (let player of sortedPlayers) {
+                const div = document.createElement('div');
+                div.innerHTML = `${player.name}: ${player.kills}`;
+                div.style.color = player.alive ? 'white' : '#666';
+                div.style.fontSize = '9px';
+                div.style.marginBottom = '1px';
+                playersDiv.appendChild(div);
+            }
+
+            // Respawn timer
+            if (!myPlayer.alive) {
+                const timeLeft = Math.ceil((GAME_CONFIG.RESPAWN_TIME - (Date.now() - myPlayer.deathTime)) / 1000);
+                if (timeLeft > 0) {
+                    document.getElementById('respawnTimer').style.display = 'block';
+                    document.getElementById('respawnTimer').textContent = `Respawning in ${timeLeft}`;
+                } else {
+                    document.getElementById('respawnTimer').style.display = 'none';
+                }
+            } else {
+                document.getElementById('respawnTimer').style.display = 'none';
+            }
+        }
+
+        function drawMinimap() {
+            const ctx = gameState.minimapCtx;
+            const canvas = gameState.minimap;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const scaleX = canvas.width / GAME_CONFIG.WORLD_WIDTH;
+            const scaleY = canvas.height / GAME_CONFIG.WORLD_HEIGHT;
+            
+            // Draw players
+            for (let [id, player] of gameState.players) {
+                if (player.alive) {
+                    const x = player.x * scaleX;
+                    const y = player.y * scaleY;
+                    
+                    if (id === gameState.myPlayerId) {
+                        // King icon - crown shape
+                        ctx.fillStyle = '#FFD700';
+                        ctx.fillRect(x - 2, y - 2, 4, 3);
+                        ctx.fillRect(x - 1, y - 3, 2, 1);
+                    } else {
+                        // Enemy icon - skull shape
+                        ctx.fillStyle = player.enemyType.colors[0];
+                        ctx.fillRect(x - 2, y - 2, 4, 4);
+                        ctx.fillStyle = '#FF0000';
+                        ctx.fillRect(x - 1, y - 1, 1, 1);
+                        ctx.fillRect(x, y - 1, 1, 1);
+                    }
+                }
+            }
+            
+            // Draw camera view
+            const myPlayer = gameState.players.get(gameState.myPlayerId);
+            if (myPlayer && myPlayer.alive) {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    gameState.camera.x * scaleX,
+                    gameState.camera.y * scaleY,
+                    gameState.canvas.width * scaleX,
+                    gameState.canvas.height * scaleY
+                );
+            }
+        }
+
+        function render() {
+            const ctx = gameState.ctx;
+            const canvas = gameState.canvas;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#98FB98');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw clouds (simple)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            for (let i = 0; i < 10; i++) {
+                const x = (i * 200 - gameState.camera.x * 0.1) % (canvas.width + 100);
+                const y = (i * 80 - gameState.camera.y * 0.1) % (canvas.height + 50);
+                ctx.beginPath();
+                ctx.arc(x, y, 30, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Draw players
+            for (let [id, player] of gameState.players) {
+                player.draw(ctx, gameState.camera);
+            }
+            
+            // Draw bullets
+            for (let bullet of gameState.bullets) {
+                bullet.draw(ctx, gameState.camera);
+            }
+            
+            // Draw minimap
+            drawMinimap();
+        }
+
+        function gameLoop() {
+            if (gameState.gameStarted) {
+                // Update all game objects
+                for (let [id, player] of gameState.players) {
+                    player.update();
+                }
+                
+                updatePlayer();
+                updateAI();
+                updateBullets();
+                updateExplosions();
+                gameState.camera.update();
+                updateUI();
+            }
+            
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function createExplosion(x, y) {
+            const explosion = document.createElement('div');
+            explosion.className = 'explosion';
+            explosion.style.left = (x - gameState.camera.x - 30) + 'px';
+            explosion.style.top = (y - gameState.camera.y - 30) + 'px';
+            document.getElementById('ui').appendChild(explosion);
+            
+            setTimeout(() => {
+                explosion.remove();
+            }, 500);
+        }
+
+        function showDamageIndicator(x, y, damage) {
+            const indicator = document.createElement('div');
+            indicator.className = 'damage-indicator';
+            indicator.textContent = '-' + damage;
+            indicator.style.left = (x - gameState.camera.x) + 'px';
+            indicator.style.top = (y - gameState.camera.y) + 'px';
+            document.getElementById('ui').appendChild(indicator);
+            
+            setTimeout(() => {
+                indicator.remove();
+            }, 1000);
+        }
+
+        function showSettings() {
+            alert('Settings menu would open here.\nFeatures could include:\n- Graphics quality\n- Sound volume\n- Controls customization\n- Display options');
+        }
+
+        // Initialize the game when page loads
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
